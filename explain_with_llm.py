@@ -123,30 +123,31 @@ def collect_evidence(pred_date: str, tweets_df: pd.DataFrame, prices_df: pd.Data
 
 def gen_explanation(tok, lm, ticker: str, pred_date: str, prob_up: float, thr: float, ev: Dict) -> str:
     bullets = [
-        f"- 证据日（前一交易日）：{ev['evidence_day']}",
-        f"- 收盘前情绪均值：{ev['sent_mean']:.3f}；正面比例：{ev['sent_pos_ratio']:.1%}",
-        f"- 当日价格变动：{ev['price_change_today']:+.2%}" + (f"；成交量/20日均：{ev['volume_rel_mean']:.2f}x" if ev['volume_rel_mean'] is not None else "")
+        f"- Evidence day (previous trading day): {ev['evidence_day']}",
+        f"- Pre-closing sentiment mean: {ev['sent_mean']:.3f}; Positive ratio: {ev['sent_pos_ratio']:.1%}",
+        f"- Price change today: {ev['price_change_today']:+.2%}" + (f"; Volume/20-day mean: {ev['volume_rel_mean']:.2f}x" if ev['volume_rel_mean'] is not None else "")
     ]
     if ev["keywords"]:
-        bullets.append(f"- 关键词（频次）：{', '.join(ev['keywords'][:10])}")
+        bullets.append(f"- Keywords (frequency): {', '.join(ev['keywords'][:10])}")
     if ev["tweets_sample"]:
-        bullets.append("- 代表性推文（收盘前）：")
+        bullets.append("- Representative tweets (pre-closing):")
         for t in ev["tweets_sample"]:
             bullets.append(f"  • {t[:140]}")
 
-    system = "你是严谨的金融研究助理。基于证据，输出可核查、克制的解释；中文回答，避免投资建议。"
-    user = f"""标的：{ticker}
-预测目标日（明日）：{pred_date}
-模型判断：上涨概率 {prob_up:.1%}（阈值 {thr:.2f}）
+    system = "You are a rigorous financial research assistant. Based on the provided evidence, output verifiable and cautious explanations in English. Avoid making investment advice."
+    user = f"""Ticker: {ticker}
+Prediction target day (tomorrow): {pred_date}
+Model assessment: probability of going up {prob_up:.1%} (threshold {thr:.2f})
 
-证据：
+Evidence:
 {os.linesep.join(bullets)}
 
-请用要点式回答：
-1) 明日可能上涨/下跌的主要驱动点（结合关键词与推文意涵）；
-2) 不确定性与相反信号（若有）；
-3) 需关注的后续事件（日程/财报/监管/供应链等）；
-4) 给出“证据覆盖度”的一句评价（推文是否足够、是否偏科）。
+
+Please answer in bullet points:
+1) The main driving factors for potential price increase/decrease tomorrow (considering keywords and tweet implications);
+2) Uncertainties and opposing signals (if any);
+3) Follow-up events to watch (schedules/earnings reports/regulations/supply chain, etc.);
+4) Provide a one-sentence evaluation of "evidence coverage" (whether tweets are sufficient or biased).
 """
     msgs=[{"role":"system","content":system},{"role":"user","content":user}]
     ids = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(lm.device)
@@ -183,12 +184,12 @@ def main():
         ev = collect_evidence(d, tweets, prices)
         text = gen_explanation(tok, lm, args.ticker, d, prob, args.threshold, ev)
         print("="*100)
-        print(f"[{args.ticker}] 目标日 {d} | 概率↑ {prob:.1%} | 阈值 {args.threshold:.2f}")
+        print(f"[{args.ticker}] Target Day {d} | Probability ↑ {prob:.1%} | Threshold {args.threshold:.2f}")
         print(text)
         rows.append({"date": d, "prob_up": prob, "explanation": text})
 
     pd.DataFrame(rows).to_csv(args.out_csv, index=False)
-    print("已导出解释：", os.path.abspath(args.out_csv))
+    print("Exported explanations to:", os.path.abspath(args.out_csv))
 
 if __name__ == "__main__":
     main()
